@@ -1,0 +1,435 @@
+#!/bin/bash
+
+# This is a general-purpose function to ask Yes/No questions in Bash, either
+# with or without a default answer. It keeps repeating the question until it
+# gets a valid answer.
+
+ask() {
+    # https://gist.github.com/davejamesmiller/1965569
+    local prompt default reply
+
+    if [ "${2:-}" = "Y" ]; then
+        prompt="Y/n"
+        default=Y
+    elif [ "${2:-}" = "N" ]; then
+        prompt="y/N"
+        default=N
+    else
+        prompt="y/n"
+        default=
+    fi
+
+    while true; do
+
+        # Ask the question (not using "read -p" as it uses stderr not stdout)
+        echo -n "$1 [$prompt] "
+
+        # Read the answer (use /dev/tty in case stdin is redirected from somewhere else)
+        read reply </dev/tty
+
+        # Default?
+        if [ -z "$reply" ]; then
+            reply=$default
+        fi
+
+        # Check if the reply is valid
+        case "$reply" in
+            Y*|y*) return 0 ;;
+            N*|n*) return 1 ;;
+        esac
+
+    done
+   
+}
+
+for i in "$@"
+do
+case $i in
+    --step1)
+        updateSystem=Y
+        installCommonTools=Y
+        installVBoxAdditions=Y
+        ;;
+
+    --step2)
+        installOpera=Y
+        installVSCode=Y
+        installGit=Y
+        installISE=Y
+        installXilt=Y
+        installGhdl=Y
+        installGtkWave=Y
+        installMphidflash=Y
+        installPapilioLoader=Y
+        installMimasV2Loader=Y
+        ;;
+
+    --all)
+        updateSystem=Y
+        installCommonTools=Y
+        installVBoxAdditions=Y
+        installOpera=Y
+        installVSCode=Y
+        installGit=Y
+        installISE=Y
+        installXilt=Y
+        installGhdl=Y
+        installGtkWave=Y
+        installMphidflash=Y
+        installPapilioLoader=Y
+        installMimasV2Loader=Y
+        ;;
+
+    --system)
+        updateSystem=Y;;
+    --no-system)
+        updateSystem=N;;
+
+    --tools)
+        installCommonTools=Y;;
+    --no-tools)
+        installCommonTools=N;;
+
+    --vboxadditions)
+        installVBoxAdditions=Y;;
+    --no-vboxadditions)
+        installVBoxAdditions=N;;
+
+    --opera)
+        installOpera=Y;;
+    --no-opera)
+        installOpera=N;;
+
+    --vscode)
+        installVSCode=Y;;
+    --no-vscode)
+        installVSCode=N;;
+
+    --git)
+        installGit=Y;;
+    --no-git)
+        installGit=N;;
+
+    --ise)
+        installISE=Y;;
+    --no-ise)
+        installISE=N;;
+
+    --xilt)
+        installXilt=Y;;
+    --no-xilt)
+        installXilt=N;;
+
+    --ghdl)
+        installGhdl=Y;;
+    --no-ghdl)
+        installGhdl=N;;
+
+    --gtkwave)
+        installGtkWave=Y;;
+    --no-gtkwave)
+        installGtkWave=N;;
+
+    --mphidflash)
+        installMphidflash=Y;;
+    --no-mphidflash)
+        installMphidflash=N;;
+
+    --papilio)
+        installPapilioLoader=Y;;
+    --no-papilio)
+        installPapilioLoader=N;;
+
+    --mimasv2)
+        installMimasV2Loader=Y;;
+    --no-mimasv2)
+        installMimasV2Loader=N;;
+
+    --help)
+        echo setup [options]
+        echo 
+        echo "    --step1                  Install the following..."
+        echo "    --[no-]system            Update the system"
+        echo "    --[no-]tools             Install required tools (wget, screen, python3, pip etc...)"
+        echo "    --[no-]vboxadditions     Install VirtualBox Guest Externsions"
+        echo ""
+        echo "    --step2                  Install the rest..."
+        echo "    --[no-]opera             Install Opera Browser"
+        echo "    --[no-]vscode            Install Microsoft Visual Studio Code (and VHDL extension)"
+        echo "    --[no-]git               Install Git"
+        echo "    --[no-]ise               Install Xilinx ISE"
+        echo "    --[no-]xilt              Install Xilt (Command line driver for Xilinx build tools)"
+        echo "    --[no-]ghdl              Install GHDL"
+        echo "    --[no-]gtkwave           Install GtkWave"
+        echo "    --[no-]mphidflash        Install mphidflash"
+        echo "    --[no-]papilio           Install Papilio Loader"
+        echo "    --[no-]mimasv2           Install MimasV2 Loader"
+        exit 0
+        ;;
+    
+    *)
+        # unknown option
+        echo "Unknown Option:" $i
+        exit 7
+    ;;
+esac
+done
+
+if [ "$EUID" -ne 0 ]
+  then echo "Please run as root"
+  exit
+fi
+
+# Prompt for things to do
+if [ "$installGit" == "Y" ]; then
+    echo "To set your git user name and email, enter below or leave blank to not set."
+    read -p "  Git User Name: " gitUserName
+    read -p "  Git Email Address: " gitEmail
+fi;
+
+# Suppress prompts when installing
+DEBIAN_FRONTEND=noninteractive 
+
+# Check if running under virtualbox and guest extensions haven't been installed
+if [ "$installVBoxAdditions" == "Y" ]; then
+    prod=$(dmidecode -t system|grep Product\ Name)
+    client=$(which VBoxClientX)
+    if [[ $prod == *"VirtualBox"* ]] && [ -z $client ]; then
+
+        guestExtensionsInstallCmd=$(find /media/$(echo $SUDO_USER)/ -name VBoxLinuxAdditions.run)
+
+        while [ -z $guestExtensionsInstallCmd ]; do
+            if [ -z $guestExtensionsInstallCmd ]; then
+                echo
+                echo "Guest Additions CD not found"
+                echo "(From the VirtualBox Devices Menu choose 'Insert Guess Additions CD image')"
+            fi
+
+            read -p "Press Enter to retry"
+            guestExtensionsInstallCmd=$(find /media/$(echo $SUDO_USER)/ -name VBoxLinuxAdditions.run)
+        done
+
+    fi
+fi
+
+# Update System?
+if [ "$updateSystem" == "Y" ]; then
+    echo "Updating system..."
+    apt-get update
+    apt-get -y upgrade
+fi
+
+# Common Tools?
+if [ "$installCommonTools" == "Y" ]; then
+
+    # Make sure required tools are installed
+    apt-get -y install wget curl screen minicom python3 python3-pip libncurses5
+
+    # Install some handy python libraries
+    pip3 install pyserial xmodem
+fi
+
+# Install Opera?
+if [ "$installOpera" == "Y" ]; then
+    echo "Installing Opera..."
+    wget -qO- https://deb.opera.com/archive.key | apt-key add -
+    add-apt-repository "deb [arch=i386,amd64] https://deb.opera.com/opera-stable/ stable non-free"
+    apt-get -y install opera-stable
+
+    # Set Opera a preferred browser
+    helpers=/home/$SUDO_USER/.config/xfce4/helpers.rc
+    grep -q ^WebBrowser $helpers
+    if [ $? -eq 0 ]
+    then
+        sed -i 's/^WebBrowser=.*$/WebBrowser=opera-browser/g' $helpers
+    else
+        echo WebBrowser=opera-browser >> $helpers 
+    fi
+
+fi
+
+# Install VS Code?
+if [ "$installVSCode" == "Y" ]; then
+    echo "Installing VS Code..."
+    apt-get -y install software-properties-common apt-transport-https wget
+    wget -qO- https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
+    add-apt-repository "deb [arch=amd64] https://packages.microsoft.com/repos/vscode stable main"
+    apt-get -y install code
+    sudo -u $SUDO_USER code --install-extension puorc.awesome-vhdl
+fi
+
+# Install Xilt?
+if [ "$installXilt" == "Y" ]; then
+    wget https://deb.nodesource.com/setup_10.x -O /tmp/nodesource_setup.sh
+    bash /tmp/nodesource_setup.sh
+    apt-get -y install nodejs
+    npm install -g xilt
+fi
+
+# Install Git?
+if [ "$installGit" == "Y" ]; then
+    apt-get -y install git
+    if ! [ -z "$gitUserName" ]; then
+        git config --global --replace-all user.name "$gitUserName"
+    fi
+    if ! [ -z "$gitEmail" ]; then
+        git config --global --replace-all user.email "$gitEmail"
+    fi
+fi
+
+# Install Papilio Loader?
+if [ "$installPapilioLoader" == "Y" ]; then
+
+    rm -rf /tmp/papilio-loader/
+    mkdir -p /tmp/papilio-loader/
+    pushd /tmp/papilio-loader/
+    wget https://github.com/toptensoftware/Papilio-Loader/raw/master/papilio-loader-linux.zip -O papilio-loader-linux.zip
+    unzip papilio-loader-linux.zip
+    ./install.sh
+    popd > null
+    rm -rf /tmp/papilio-loader/
+    rebootNeeded=Y
+
+fi
+
+# Install MimasV2 Loader?
+if [ "$installMimasV2Loader" == "Y" ]; then
+
+    rm -rf /tmp/mimasv2-loader/
+    mkdir -p /tmp/mimasv2-loader/
+    pushd /tmp/mimasv2-loader/
+    wget https://github.com/toptensoftware/MimasV2-Loader/archive/master.zip -O master.zip
+    unzip master.zip
+    cd ./MimasV2-Loader-master/
+    ./install.sh
+    popd > null
+    rm -rf /tmp/mimasv2-loader/
+    rebootNeeded=Y
+
+fi
+
+# Install mphidflash
+if [ "$installMphidflash" == "Y" ]; then
+
+    wget "https://bitbucket.org/toptensoftware/xilsetup/raw/master/mphidflash" -O /usr/local/bin/mphidflash
+    chmod 755 /usr/local/bin/mphidflash
+
+fi
+
+# Install VirtualBox Guest Extensions
+if ! [ -z $guestExtensionsInstallCmd ]; then
+    echo "Installing VirtualBox Guest Additions..."
+    apt-get -y install build-essential module-assistant
+    $guestExtensionsInstallCmd
+    rebootNeeded=Y
+fi
+
+# Install GHDL
+if [ "$installGhdl" == "Y" ]; then
+
+    apt-get -y install git make gcc llvm-dev gnat clang zlib1g-dev
+    git clone https://github.com/ghdl/ghdl
+    pushd ghdl
+    mkdir build
+    cd build
+    ../configure --with-llvm-config --prefix=/usr/local && make && make install
+    popd > null
+
+fi
+
+# Install GTKWave
+if [ "$installGtkWave" == "Y" ]; then
+
+    apt-get -y install gtkwave
+
+fi
+
+# Install ISE?
+if [ "$installISE" == "Y" ]; then
+
+    ## Look for the Xilinx installer .tar folder
+    pattern="/home/$SUDO_USER/Downloads/Xilinx_ISE_DS_Lin_14.7_*.tar"
+    files=( $pattern )
+    tarFile="${files[0]}"
+
+    while ! [ -e $tarFile ]; do
+
+        echo 
+        echo "Can't find Xilinx ISE installer package"
+        echo "(Looking for: $pattern)"
+        echo 
+        echo "You'll now be taken to the Xilinx download page where you'll"
+        echo "need to login to your account (or register if you're a new"
+        echo "user) before the download will commence".
+        echo 
+
+        if ask "Do you want to go to the download page?" Y; then
+
+            echo "Launching browser..."
+
+            sudo -u $SUDO_USER xdg-open https://www.xilinx.com/member/forms/download/xef.html?filename=Xilinx_ISE_DS_Lin_14.7_1015_1.tar > /dev/null 2>&1 &
+
+            echo
+            read -p "When the download has finished, press enter to continue..."
+
+        fi
+
+        files=( $pattern )
+        tarFile="${files[0]}"
+
+    done
+
+
+    if [ -e $tarFile ]; then
+
+        # Work out where to extract tar file to
+        installerFolder=${tarFile%.*}
+
+        # Extract it
+        rm -rf $installerFolder
+        tar -C /home/$SUDO_USER/Downloads -xvf $tarFile
+
+        # Run it
+        $installerFolder/xsetup
+
+        # Clean up
+        rm -rf $installerFolder
+
+        # Fix for coregen clocking wizard
+        # https://forums.xilinx.com/t5/Design-Entry/Problem-with-Xilinx-CORE-Generator-and-clocking-wizard-3-6-in/td-p/872773
+        #if [ -d /opt/Xilinx/14.7/ISE_DS/ISE/java ]; then
+        #    pushd /opt/Xilinx/14.7/ISE_DS/ISE
+        #    mv java java.old
+        #    ln -sf java6 java
+        #    popd > null
+        #fi
+
+        # Launch license manager
+        if ask "You'll need a Xilinx license. Launch the License Manager now?" Y; then
+
+            sudo -u $SUDO_USER bash -c "source /opt/Xilinx/14.7/ISE_DS/settings64.sh; xlcm"
+
+        fi
+
+    else
+
+        # Can't install it :(
+        echo "Aborted Xilinx ISE installation"
+
+    fi
+fi
+
+echo
+
+# Reboot?
+if ! [ -z $rebootNeeded ]; then
+
+    if ask "Finished. Restart machine?" Y; then
+        shutdown -r now
+    fi
+
+else
+
+    echo "Finished."
+
+fi

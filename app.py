@@ -62,7 +62,7 @@ def upload_image():
     filepath = os.path.join(UPLOAD_FOLDER, file.filename)
     file.save(filepath)
     info = predict(filepath)
-    return info
+    return jsonify({'code': '0', 'result': info}), 200
 
 @app.route('/')
 def hello_world():
@@ -71,4 +71,4 @@ def hello_world():
 
 
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=False, host='0.0.0.0')
